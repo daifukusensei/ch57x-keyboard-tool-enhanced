@@ -1,4 +1,11 @@
-# ch57x-keyboard-tool Macro Keyboard Configuration Utility
+# ch57x-keyboard-tool-enhanced
+
+Macro Keyboard Configuration Utility
+
+Forked from [kriomant/ch57x-keyboard-tool](https://github.com/kriomant/ch57x-keyboard-tool), but with the following changes:
+* Support for 12-key, 4-knob macropads (vendor ID 514C, product ID 8850)
+* Support for delays of up to 6 seconds per keyboard macro (see [Create configuration file](#create-configuration-file))
+* Fix writing to layers 2 & 3 for macropads of vendor ID 514C, product ID 8850
 
 ![Last Commit Shields.io](https://img.shields.io/github/last-commit/kriomant/ch57x-keyboard-tool?style=for-the-badge) ![Release Workflow Badge](https://github.com/kriomant/ch57x-keyboard-tool/actions/workflows/release.yml/badge.svg)
 
@@ -95,6 +102,13 @@ Install [USBDK](https://github.com/daynix/UsbDk/releases).
 Edit existing `example-mapping.yaml` or (better) save modified copy under different name.
 
 Example config file has extensive documentation inside.
+
+Delay syntax: You may optionally specify a single leading delay for a keyboard macro using the token `delay[ms]` where `ms` is an integer number of milliseconds. Example: `delay[2000],a,b,c` will output `a`, wait for 2000ms, output `b`, wait for 2000ms, then output `c`. Important rules:
+
+- Only one leading `delay[...]` is allowed per keyboard macro and it must appear as the first item in the sequence.
+- The maximum supported delay is 6000ms. Values larger than 6000 will cause validation to fail and the upload will be rejected.
+- Delays are supported for both buttons and knobs.
+- Some keyboard firmware does not support programmable delays; in particular, the `k8890` model rejects macros containing delays. Such an upload will be rejected.
 
 You may also get list of supported key names using:
 

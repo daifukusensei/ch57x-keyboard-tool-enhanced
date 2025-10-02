@@ -34,15 +34,21 @@ impl Keyboard for Keyboard884x {
             Macro::Keyboard(presses) => {
                 ensure!(presses.len() <= 18, "macro sequence is too long");
 
-                // Allow single key modifier to be used in combo with other key(s)
-                if presses.len() == 1 && presses[0].code.is_none(){
-                    msg.push(0);
-                } else {
-                    msg.push(presses.len() as u8);
-                }
+                // Count only key parts when putting header length
+                let key_count = presses.iter().filter(|p| matches!(p, super::KeyboardPart::Key(_))).count();
 
-                for Accord { modifiers, code } in presses.iter() {
-                    msg.extend_from_slice(&[modifiers.as_u8(), code.map_or(0, |c| c.value())]);
+                // Use actual key count. Using 0 for single-key breaks cases with a leading delay.
+                msg.push(key_count as u8);
+
+                for part in presses.iter() {
+                    match part {
+                        super::KeyboardPart::Key(Accord { modifiers, code }) => {
+                            msg.extend_from_slice(&[modifiers.as_u8(), code.map_or(0, |c| c.value())]);
+                        }
+                        super::KeyboardPart::Delay(_) => {
+                            // Delay entries are not part of the header payload for key programming.
+                        }
+                    }
                 }
             }
             Macro::Media(code) => {
@@ -61,10 +67,29 @@ impl Keyboard for Keyboard884x {
             }
         };
 
+        // Send main programming message (keys/media/mouse)
         self.send(&msg)?;
 
+        // If macro has a leading delay part (we validated earlier that any delay must be leading),
+        // send a single delay message with the specified ms after programming the macro.
+        if let Macro::Keyboard(parts) = expansion {
+            if let Some(super::KeyboardPart::Delay(ms)) = parts.first() {
+                if *ms > 6000 {
+                    return Err(anyhow::anyhow!("delay value {ms}ms exceeds maximum supported 6000ms"));
+                }
+                let mut delay_msg = msg.clone();
+                delay_msg[4] = 0x05;
+                let [low, high] = ms.to_le_bytes();
+                delay_msg[5] = low;
+                delay_msg[6] = high;
+                self.send(&delay_msg)?;
+            }
+        }
+
         // Finish key binding
+        self.send(&[0x03, 0xaa, 0xaa, 0, 0, 0, 0, 0, 0])?;
         self.send(&[0x03, 0xfd, 0xfe, 0xff])?;
+        self.send(&[0x03, 0xaa, 0xaa, 0, 0, 0, 0, 0, 0])?;
 
         Ok(())
     }

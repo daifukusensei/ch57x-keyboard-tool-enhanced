@@ -21,8 +21,13 @@ impl Keyboard for Keyboard8890 {
         match expansion {
             Macro::Keyboard(presses) => {
                 ensure!(presses.len() <= 5, "macro sequence is too long");
+                // k8890 does not support delay parts; reject if present.
+                ensure!(presses.iter().all(|p| matches!(p, super::KeyboardPart::Key(_))), "delays are not supported for this keyboard model");
                 // For whatever reason empty key is added before others.
-                let iter = presses.iter().map(|accord| (accord.modifiers.as_u8(), accord.code.map_or(0, |c| c.value())));
+                let iter = presses.iter().map(|part| match part {
+                    super::KeyboardPart::Key(accord) => (accord.modifiers.as_u8(), accord.code.map_or(0, |c| c.value())),
+                    _ => (0,0),
+                });
                 let (len, items) = (presses.len() as u8, Box::new(std::iter::once((0, 0)).chain(iter)));
                 for (i, (modifiers, code)) in items.enumerate() {
                     self.send(&[

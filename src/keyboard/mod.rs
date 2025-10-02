@@ -70,7 +70,10 @@ impl Key {
         match self {
             Key::Button(n) if n >= base => Err(anyhow!("invalid key index")),
             Key::Button(n) => Ok(n + 1),
-            Key::Knob(n, _) if n >= 3 => Err(anyhow!("invalid knob index")),
+            Key::Knob(n, _) if n >= 4 => Err(anyhow!("invalid knob index")),
+            // Special case: 4th knob (index 3)
+            Key::Knob(3, action) => Ok(13 + (action as u8)),
+            // Default knob case
             Key::Knob(n, action) => Ok(base + 1 + 3 * n + (action as u8)),
         }
     }
@@ -371,9 +374,24 @@ impl Display for MouseEvent {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, DeserializeFromStr)]
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum KeyboardPart {
+    Key(Accord),
+    Delay(u16),
+}
+
+impl std::fmt::Display for KeyboardPart {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            KeyboardPart::Key(accord) => write!(f, "{}", accord),
+            KeyboardPart::Delay(ms) => write!(f, "delay[{}]", ms),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Macro {
-    Keyboard(Vec<Accord>),
+    Keyboard(Vec<KeyboardPart>),
     #[allow(unused)]
     Media(MediaCode),
     #[allow(unused)]
@@ -410,6 +428,38 @@ impl Display for Macro {
             Macro::Mouse(event) => {
                 write!(f, "{}", event)
             }
+        }
+    }
+}
+
+// Provide a custom Deserialize impl so we can return friendlier errors when
+// users try to combine media tokens with delays/keys (media must be standalone).
+impl<'de> serde::Deserialize<'de> for Macro {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        // Deserialize as string first
+        let s = String::deserialize(deserializer)?;
+
+        // If the user provided a comma-separated macro and any segment is a media
+        // token, return a clear error explaining media macros must be standalone.
+        if s.contains(',') {
+            for seg in s.split(',') {
+                let seg = seg.trim();
+                if seg.parse::<MediaCode>().is_ok() {
+                    return Err(serde::de::Error::custom(format!(
+                        "media macros must be standalone: '{}' cannot be combined with delays or other keys",
+                        seg
+                    )));
+                }
+            }
+        }
+
+        // Fall back to existing FromStr parsing and surface its error if parsing fails.
+        match s.parse::<Macro>() {
+            Ok(m) => Ok(m),
+            Err(e) => Err(serde::de::Error::custom(format!("invalid macro '{}': {}", s, e))),
         }
     }
 }

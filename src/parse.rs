@@ -16,7 +16,7 @@ use nom::{
     error::ParseError,
 };
 
-use crate::keyboard::{Accord, Modifier, Modifiers, Macro, MouseEvent, MouseModifier, MouseButton, MouseButtons, MouseAction, MediaCode, Code, WellKnownCode};
+use crate::keyboard::{Accord, Modifier, Modifiers, Macro, KeyboardPart, MouseEvent, MouseModifier, MouseButton, MouseButtons, MouseAction, MediaCode, Code, WellKnownCode};
 
 use std::str::FromStr;
 
@@ -96,11 +96,35 @@ fn mouse_event(s: &str) -> IResult<&str, MouseEvent> {
     event(s)
 }
 
+fn delay_part(s: &str) -> IResult<&str, KeyboardPart> {
+    let mut parser = map(
+        tuple((tag("delay"), delimited(char('['), map_res(digit1, |d: &str| d.parse::<u16>()), char(']')))),
+        |(_, ms)| KeyboardPart::Delay(ms),
+    );
+    parser(s)
+}
+
+fn keyboard_part(s: &str) -> IResult<&str, KeyboardPart> {
+    alt((map(accord, KeyboardPart::Key), delay_part))(s)
+}
+
 pub fn r#macro(s: &str) -> IResult<&str, Macro> {
+    // If input contains comma-separated parts, ensure media tokens are not present
+    // (media macros are standalone and cannot be combined with delays/keys/modifiers).
+    if s.contains(',') {
+        for seg in s.split(',') {
+            let seg = seg.trim();
+            // If a segment parses as a media code, reject the whole input with a clear failure.
+            if media_code(seg).is_ok() {
+                return Err(nom::Err::Failure(nom::error::Error::new(s, nom::error::ErrorKind::Verify)));
+            }
+        }
+    }
+
     let mut parser = alt((
         map(mouse_event, Macro::Mouse),
         map(media_code, Macro::Media),
-        map(separated_list1(char(','), accord), Macro::Keyboard),
+        map(separated_list1(char(','), keyboard_part), Macro::Keyboard),
     ));
     parser(s)
 }
@@ -137,7 +161,7 @@ where
 
 #[cfg(test)]
 mod tests {
-    use crate::keyboard::{Accord, Modifiers, Code, Modifier, Macro, MouseEvent, MouseModifier, MouseButton, MouseAction, MediaCode, WellKnownCode};
+    use crate::keyboard::{Accord, Modifiers, Code, Modifier, Macro, KeyboardPart, MouseEvent, MouseModifier, MouseButton, MouseAction, MediaCode, WellKnownCode};
 
     #[test]
     fn parse_custom_code() {
@@ -161,12 +185,12 @@ mod tests {
     #[test]
     fn parse_macro() {
         assert_eq!("A,B".parse(), Ok(Macro::Keyboard(vec![
-            Accord::new(Modifiers::empty(), Some(WellKnownCode::A.into())),
-            Accord::new(Modifiers::empty(), Some(WellKnownCode::B.into())),
+            KeyboardPart::Key(Accord::new(Modifiers::empty(), Some(WellKnownCode::A.into()))),
+            KeyboardPart::Key(Accord::new(Modifiers::empty(), Some(WellKnownCode::B.into()))),
         ])));
         assert_eq!("ctrl-A,alt-backspace".parse(), Ok(Macro::Keyboard(vec![
-            Accord::new(Modifier::Ctrl, Some(WellKnownCode::A.into())),
-            Accord::new(Modifier::Alt, Some(WellKnownCode::Backspace.into())),
+            KeyboardPart::Key(Accord::new(Modifier::Ctrl, Some(WellKnownCode::A.into()))),
+            KeyboardPart::Key(Accord::new(Modifier::Alt, Some(WellKnownCode::Backspace.into()))),
         ])));
         assert_eq!("click".parse(), Ok(Macro::Mouse(
             MouseEvent(MouseAction::Click(MouseButton::Left.into()), None)
