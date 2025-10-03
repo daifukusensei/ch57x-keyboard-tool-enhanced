@@ -1,7 +1,7 @@
 use anyhow::{bail, ensure, Result};
 use serde::Deserialize;
 
-use crate::keyboard::{Macro, KeyboardPart};
+use crate::keyboard::{Macro, KeyboardPart, MouseAction, MouseEvent};
 
 #[derive(Debug, Deserialize)]
 pub struct Config {
@@ -48,6 +48,15 @@ impl Config {
             // Validate delay usage: at most one delay allowed and if present it must be the first item
             for (r_idx, button_macro) in buttons.iter().enumerate() {
                 if let Some(m) = button_macro {
+                    // Validate mouse moves as well as keyboard parts
+                    if let Macro::Mouse(MouseEvent(action, _)) = m {
+                        if let MouseAction::Move { dx, dy } = action {
+                            if *dx < -128 || *dx > 127 || *dy < -128 || *dy > 127 {
+                                bail!("Invalid mapping: mouse move dx/dy ({},{}) exceeds supported range -128..127 in macro '{}' in layer {}, button index {}.", dx, dy, m, i, r_idx);
+                            }
+                        }
+                    }
+
                     if let Macro::Keyboard(parts) = m {
                         // count delays
                         let delay_count = parts.iter().filter(|p| matches!(p, KeyboardPart::Delay(_))).count();
@@ -75,6 +84,15 @@ impl Config {
             for (k_idx, knob) in knobs.iter().enumerate() {
                 let check = |opt_macro: &Option<Macro>| -> Result<()> {
                     if let Some(m) = opt_macro {
+                        // Validate mouse move values on knobs too
+                        if let Macro::Mouse(MouseEvent(action, _)) = m {
+                            if let MouseAction::Move { dx, dy } = action {
+                                if *dx < -128 || *dx > 127 || *dy < -128 || *dy > 127 {
+                                    bail!("Invalid mapping: mouse move dx/dy ({},{}) exceeds supported range -128..127 in knob macro '{}' in layer {}, knob index {}.", dx, dy, m, i, k_idx);
+                                }
+                            }
+                        }
+
                         if let Macro::Keyboard(parts) = m {
                             let delay_count = parts.iter().filter(|p| matches!(p, KeyboardPart::Delay(_))).count();
                             if delay_count > 1 {
