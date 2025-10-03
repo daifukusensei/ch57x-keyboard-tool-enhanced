@@ -57,13 +57,26 @@ impl Keyboard for Keyboard884x {
             }
             Macro::Mouse(MouseEvent(MouseAction::Click(buttons), _)) => {
                 ensure!(!buttons.is_empty(), "buttons must be given for click macro");
-                msg.extend_from_slice(&[0x01, 0, buttons.as_u8()]);
+                // Python encoding: [modifier, button, x, y, wheel]
+                msg.push(5);
+                msg.extend_from_slice(&[0, buttons.as_u8(), 0, 0, 0]);
             }
             Macro::Mouse(MouseEvent(MouseAction::WheelUp, modifier)) => {
-                msg.extend_from_slice(&[0x03, modifier.map_or(0, |m| m as u8), 0, 0, 0, 0x1]);
+                msg.push(5);
+                msg.extend_from_slice(&[modifier.map_or(0, |m| m as u8), 0, 0, 0, 1]);
             }
             Macro::Mouse(MouseEvent(MouseAction::WheelDown, modifier)) => {
-                msg.extend_from_slice(&[0x03, modifier.map_or(0, |m| m as u8), 0, 0, 0, 0xff]);
+                msg.push(5);
+                msg.extend_from_slice(&[modifier.map_or(0, |m| m as u8), 0, 0, 0, 255]);
+            }
+            // ...existing code...
+            Macro::Mouse(MouseEvent(MouseAction::Move { dx, dy }, modifier)) => {
+                // Encode dx/dy as low bytes (two's complement via cast) into Python-style positions:
+                // [modifier, button/flag, x, y, wheel]
+                let x_b = ((*dx as i32) & 0xff) as u8;
+                let y_b = ((*dy as i32) & 0xff) as u8;
+                msg.push(5);
+                msg.extend_from_slice(&[modifier.map_or(0, |m| m as u8), 0, x_b, y_b, 0]);
             }
         };
 

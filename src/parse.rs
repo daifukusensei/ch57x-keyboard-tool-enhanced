@@ -8,7 +8,7 @@
 use nom::{
     Parser, IResult, InputLength,
     branch::alt,
-    sequence::{tuple, terminated, separated_pair, delimited, pair},
+    sequence::{tuple, terminated, separated_pair, delimited, pair, preceded},
     multi::{separated_list1, fold_many0},
     bytes::complete::tag,
     character::complete::{char, alpha1, alphanumeric1, digit1},
@@ -26,6 +26,14 @@ fn mouse_modifier(s: &str) -> IResult<&str, MouseModifier> {
 
 fn media_code(s: &str) -> IResult<&str, MediaCode> {
     map_res(alpha1, MediaCode::from_str)(s)
+}
+
+fn signed_int(s: &str) -> IResult<&str, i16> {
+    map_res(pair(opt(char('-')), digit1), |(sign, digits): (Option<char>, &str)| {
+        let mut val: i16 = digits.parse().map_err(|e: std::num::ParseIntError| e)?;
+        if sign.is_some() { val = -val; }
+        Ok::<i16, std::num::ParseIntError>(val)
+    })(s)
 }
 
 pub fn code(s: &str) -> IResult<&str, Code> {
@@ -85,10 +93,15 @@ fn mouse_event(s: &str) -> IResult<&str, MouseEvent> {
         value(MouseAction::WheelDown, tag("wheeldown")),
     ));
 
+    let mousemove = map(
+        preceded(tag("mousemove"), delimited(char('['), separated_pair(signed_int, char(','), signed_int), char(']'))),
+        |(dx, dy)| MouseAction::Move { dx, dy }
+    );
+
     let mut event = map(
         tuple((
             opt(terminated(mouse_modifier, char('-'))),
-            alt((click, wheel)),
+            alt((click, wheel, mousemove)),
         )),
         |(modifier, action)| MouseEvent(action, modifier)
     );
@@ -209,5 +222,16 @@ mod tests {
     #[test]
     fn parse_media() {
         assert_eq!("play".parse(), Ok(Macro::Media(MediaCode::Play)));
+    }
+
+    #[test]
+    fn parse_mousemove_numeric() {
+        assert_eq!("mousemove[10,20]".parse(), Ok(Macro::Mouse(
+            MouseEvent(MouseAction::Move { dx: 10, dy: 20 }, None)
+        )));
+
+        assert_eq!("mousemove[-5,-10]".parse(), Ok(Macro::Mouse(
+            MouseEvent(MouseAction::Move { dx: -5, dy: -10 }, None)
+        )));
     }
 }

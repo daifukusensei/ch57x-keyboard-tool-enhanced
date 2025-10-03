@@ -345,6 +345,9 @@ pub enum MouseAction {
     Click(MouseButtons),
     WheelUp,
     WheelDown,
+    /// Relative move in device units. Positive X = right, Positive Y = down.
+    #[allow(dead_code)]
+    Move { dx: i16, dy: i16 },
 }
 
 impl Display for MouseAction {
@@ -355,6 +358,7 @@ impl Display for MouseAction {
             }
             MouseAction::WheelUp => { write!(f, "wheelup")?; }
             MouseAction::WheelDown => { write!(f, "wheeldown")?; }
+            MouseAction::Move { dx, dy } => { write!(f, "move({},{})", dx, dy)?; }
         }
         Ok(())
     }
