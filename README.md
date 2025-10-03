@@ -5,6 +5,7 @@ Macro Keyboard Configuration Utility
 Forked from [kriomant/ch57x-keyboard-tool](https://github.com/kriomant/ch57x-keyboard-tool), but with the following changes:
 * Support for 12-key, 4-knob macropads (vendor ID 514C, product ID 8850)
 * Support for delays of up to 6 seconds per keyboard macro (see [Create configuration file](#create-configuration-file))
+* Support for mouse movement by x,y units
 * Fix writing to layers 2 & 3 for macropads of vendor ID 514C, product ID 8850
 
 ![Last Commit Shields.io](https://img.shields.io/github/last-commit/kriomant/ch57x-keyboard-tool?style=for-the-badge) ![Release Workflow Badge](https://github.com/kriomant/ch57x-keyboard-tool/actions/workflows/release.yml/badge.svg)
